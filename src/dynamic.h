@@ -14,11 +14,6 @@ private:
 	~DynamicObject();
 
 	static v8::Persistent<v8::Function> constructor;
-	static v8::Handle<v8::String> s_get;
-	static v8::Handle<v8::String> s_set;
-	static v8::Handle<v8::String> s_query;
-	static v8::Handle<v8::String> s_delete;
-	static v8::Handle<v8::String> s_enumerate;
 
 	/// Prototype methods
 	static void New(const v8::FunctionCallbackInfo<v8::Value>& args);

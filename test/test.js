@@ -10,8 +10,9 @@ console.log("d.set = ", d.set);
 d.get = function(name){
 	return 10;
 };
+d.set = function(name, value){
+};
 
 console.log("d.get = ", d.get);
-
 console.log("d.a = ", d.a);
-
+console.log("d.prototype = ", d.prototype);
