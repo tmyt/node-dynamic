@@ -1,32 +1,81 @@
+#include<iostream>
 #include<node.h>
 
 #include"dynamic.h"
 
-#define CALL_JSHANDLER_0(Ty_, fn_) \
-{ \
-	Local<Context> context = Context::New(isolate); \
-	Local<Function> fn = Local<Function>::Cast(obj->fn_); \
-	const unsigned argc = 0; \
-	Local<Value> argv[argc] = { }; \
-	info.GetReturnValue().Set(Handle<Ty_>::Cast(fn->Call(context->Global(), argc, argv))); \
+using namespace v8;
+
+#define ISOLATE(x,y) Isolate* x = Isolate::GetCurrent(); Local<Context> y = Context::New(x);
+#define CASTFN(x, y) Local<Function> x = Local<Function>::Cast(y);
+
+template<typename T>
+Local<T> CallHandler(Local<Value> fn_)
+{
+	ISOLATE(isolate, context);
+	CASTFN(fn, fn_);
+	Local<Value> argv[] = { };
+	Local<Value> ret = fn->Call(context->Global(), 0, argv);
+	return Handle<T>::Cast(ret);
 }
 
-#define CALL_JSHANDLER_1(Ty_, fn_, arg_) \
-{ \
-	Local<Context> context = Context::New(isolate); \
-	Local<Function> fn = Local<Function>::Cast(obj->fn_); \
-	const unsigned argc = 1; \
-	Local<Value> argv[argc] = { arg_ }; \
-	info.GetReturnValue().Set(Handle<Ty_>::Cast(fn->Call(context->Global(), argc, argv))); \
+template<typename T>
+Local<T> CallHandler(Local<Value> fn_, const Local<Value>& arg1)
+{
+	ISOLATE(isolate, context);
+	CASTFN(fn, fn_);
+	Local<Value> argv[] = { arg1 };
+	Local<Value> ret = fn->Call(context->Global(), 1, argv);
+	return Handle<T>::Cast(ret);
 }
 
-#define CALL_JSHANDLER_2(fn_, arg1_, arg2_) \
-{ \
-	Local<Context> context = Context::New(isolate); \
-	Local<Function> fn = Local<Function>::Cast(obj->fn_); \
-	const unsigned argc = 2; \
-	Local<Value> argv[argc] = { arg1_, arg2_ }; \
-	info.GetReturnValue().Set(fn->Call(context->Global(), argc, argv)); \
+template<typename T>
+Local<T> CallHandler(Local<Value> fn_, const Local<Value>& arg1, const Local<Value>& arg2)
+{
+	ISOLATE(isolate, context);
+	CASTFN(fn, fn_);
+	Local<Value> argv[] = { arg1, arg2 };
+	Local<Value> ret = fn->Call(context->Global(), 2, argv);
+	return Handle<T>::Cast(ret);
+}
+
+template<>
+Local<v8::Value> CallHandler(Local<Value> fn_)
+{
+	ISOLATE(isolate, context);
+	CASTFN(fn, fn_);
+	Local<Value> argv[] = { };
+	Local<Value> ret = fn->Call(context->Global(), 0, argv);
+	return ret;
+}
+
+template<>
+Local<v8::Value> CallHandler(Local<Value> fn_, const Local<Value>& arg1)
+{
+	ISOLATE(isolate, context);
+	CASTFN(fn, fn_);
+	Local<Value> argv[] = { arg1 };
+	Local<Value> ret = fn->Call(context->Global(), 1, argv);
+	return ret;
+}
+
+template<>
+Local<v8::Value> CallHandler(Local<Value> fn_, const Local<Value>& arg1, const Local<Value>& arg2)
+{
+	ISOLATE(isolate, context);
+	CASTFN(fn, fn_);
+	Local<Value> argv[] = { arg1, arg2 };
+	Local<Value> ret = fn->Call(context->Global(), 2, argv);
+	return ret;
+}
+
+template<>
+Local<Boolean> CallHandler(Local<Value> fn_, const Local<Value>& arg1)
+{
+	ISOLATE(isolate, context);
+	CASTFN(fn, fn_);
+	Local<Value> argv[] = { arg1 };
+	Local<Value> ret = fn->Call(context->Global(), 1, argv);
+	return Boolean::New(isolate, ret->BooleanValue());
 }
 
 #define GET_HANDLER_PROP(name) \
@@ -40,14 +89,13 @@
 	|| property->Equals(s_query) || property->Equals(s_delete) \
 	|| property->Equals(s_enumerate)
 
-using namespace v8;
 
 Persistent<Function> DynamicObject::constructor;
-Handle<String> s_get;
-Handle<String> s_set;
-Handle<String> s_query;
-Handle<String> s_delete;
-Handle<String> s_enumerate;
+Handle<String> DynamicObject::s_get;
+Handle<String> DynamicObject::s_set;
+Handle<String> DynamicObject::s_query;
+Handle<String> DynamicObject::s_delete;
+Handle<String> DynamicObject::s_enumerate;
 
 DynamicObject::DynamicObject()
 {
@@ -57,7 +105,7 @@ DynamicObject::~DynamicObject()
 {
 }
 
-void DynamicObject::Init(Handle<Object> exports)
+void DynamicObject::Init(Handle<Object> exports, Handle<Object> module)
 {
 	Isolate* isolate = Isolate::GetCurrent();
 
@@ -76,7 +124,7 @@ void DynamicObject::Init(Handle<Object> exports)
 
 	// Prototype
 	constructor.Reset(isolate, tpl->GetFunction());
-	exports->Set(String::NewFromUtf8(isolate, "DynamicObject"),
+	module->Set(String::NewFromUtf8(isolate, "exports"),
 	             tpl->GetFunction());
 }
 
@@ -111,7 +159,7 @@ void DynamicObject::Get(v8::Local<v8::String> property, const v8::PropertyCallba
 		return;
 	}
 	// call javascript handler
-	CALL_JSHANDLER_1(Value, get_, property);
+	CallHandler<Value>(obj->get_, property);
 }
 
 void DynamicObject::Set(v8::Local<v8::String> property, v8::Local<v8::Value> value, const v8::PropertyCallbackInfo<v8::Value>& info)
@@ -132,7 +180,7 @@ void DynamicObject::Set(v8::Local<v8::String> property, v8::Local<v8::Value> val
 		return;
 	}
 	// call javascript handler
-	CALL_JSHANDLER_2(set_, property, value);
+	CallHandler<Value>(obj->set_, property, value);
 }
 
 void DynamicObject::Query(v8::Local<v8::String> property, const v8::PropertyCallbackInfo<v8::Integer>& info)
@@ -153,7 +201,7 @@ void DynamicObject::Query(v8::Local<v8::String> property, const v8::PropertyCall
 		return;
 	}
 	// call javascript handler
-	CALL_JSHANDLER_1(Integer, query_, property);
+	CallHandler<Integer>(obj->query_, property);
 }
 
 void DynamicObject::Delete(v8::Local<v8::String> property, const v8::PropertyCallbackInfo<v8::Boolean>& info)
@@ -174,7 +222,7 @@ void DynamicObject::Delete(v8::Local<v8::String> property, const v8::PropertyCal
 		return;
 	}
 	// call javascript handler
-	CALL_JSHANDLER_1(Boolean, delete_, property);
+	CallHandler<Boolean>(obj->delete_, property);
 }
 
 void DynamicObject::Enumerate(const v8::PropertyCallbackInfo<v8::Array>& info)
@@ -188,6 +236,6 @@ void DynamicObject::Enumerate(const v8::PropertyCallbackInfo<v8::Array>& info)
 		return;
 	}
 	// call javascript handler
-	CALL_JSHANDLER_0(Array, enumerate_);
+	CallHandler<Array>(obj->enumerate_);
 }
 
