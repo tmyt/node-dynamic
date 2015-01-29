@@ -31,11 +31,11 @@ private:
 	static void Enumerate(const v8::PropertyCallbackInfo<v8::Array>& info);
 
 	/// Instance fields
-	v8::Local<v8::Value> get_;
-	v8::Local<v8::Value> set_;
-	v8::Local<v8::Value> query_;
-	v8::Local<v8::Value> delete_;
-	v8::Local<v8::Value> enumerate_;
+	v8::Persistent<v8::Value> get_;
+	v8::Persistent<v8::Value> set_;
+	v8::Persistent<v8::Value> query_;
+	v8::Persistent<v8::Value> delete_;
+	v8::Persistent<v8::Value> enumerate_;
 };
 
 #endif

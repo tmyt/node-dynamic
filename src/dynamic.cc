@@ -1,12 +1,12 @@
-#include<iostream>
 #include<node.h>
+#include<cstring>
 
 #include"dynamic.h"
 
 using namespace v8;
 
-#define ISOLATE(x,y) Isolate* x = Isolate::GetCurrent(); Local<Context> y = Context::New(x);
-#define CASTFN(x, y) Local<Function> x = Local<Function>::Cast(y);
+#define ISOLATE(x,y) Isolate* x = Isolate::GetCurrent(); Local<Context> y = Context::New(x)
+#define CASTFN(x, y) Local<Function> x = Local<Function>::Cast(y)
 
 template<typename T>
 Local<T> CallHandler(Local<Value> fn_)
@@ -39,7 +39,7 @@ Local<T> CallHandler(Local<Value> fn_, const Local<Value>& arg1, const Local<Val
 }
 
 template<>
-Local<v8::Value> CallHandler(Local<Value> fn_)
+Local<Value> CallHandler(Local<Value> fn_)
 {
 	ISOLATE(isolate, context);
 	CASTFN(fn, fn_);
@@ -49,7 +49,7 @@ Local<v8::Value> CallHandler(Local<Value> fn_)
 }
 
 template<>
-Local<v8::Value> CallHandler(Local<Value> fn_, const Local<Value>& arg1)
+Local<Value> CallHandler(Local<Value> fn_, const Local<Value>& arg1)
 {
 	ISOLATE(isolate, context);
 	CASTFN(fn, fn_);
@@ -59,7 +59,7 @@ Local<v8::Value> CallHandler(Local<Value> fn_, const Local<Value>& arg1)
 }
 
 template<>
-Local<v8::Value> CallHandler(Local<Value> fn_, const Local<Value>& arg1, const Local<Value>& arg2)
+Local<Value> CallHandler(Local<Value> fn_, const Local<Value>& arg1, const Local<Value>& arg2)
 {
 	ISOLATE(isolate, context);
 	CASTFN(fn, fn_);
@@ -79,16 +79,22 @@ Local<Boolean> CallHandler(Local<Value> fn_, const Local<Value>& arg1)
 }
 
 #define GET_HANDLER_PROP(name) \
-	if(property->Equals(s_##name)) { info.GetReturnValue().Set(obj->name##_); return; }
+	if(strcmp(*u8prop, #name) == 0) { info.GetReturnValue().Set(Local<Value>::New(isolate, obj->name##_)); return; }
 
 #define SET_HANDLER_PROP(name, value) \
-	if(property->Equals(s_##name)) { obj->name##_ = value; info.GetReturnValue().Set(value); return; }
+	if(strcmp(*u8prop, #name) == 0) { obj->name##_.Reset(isolate, value); info.GetReturnValue().Set(value); return; }
 
 #define IS_INTERNAL_PROP \
 	property->Equals(s_get) || property->Equals(s_set) \
 	|| property->Equals(s_query) || property->Equals(s_delete) \
 	|| property->Equals(s_enumerate)
 
+#define CHECK(x) lfn(x); if(fn->IsUndefined() || !fn->IsFunction())
+#define HANDLE(x) info.GetReturnValue().Set(x)
+
+#define Undef(x) x##_.Reset(isolate, Undefined(isolate))
+#define local(x, y) Local<Value> x = Local<Value>::New(isolate, y)
+#define lfn(x) local(fn, obj->x##_)
 
 Persistent<Function> DynamicObject::constructor;
 Handle<String> DynamicObject::s_get;
@@ -99,6 +105,12 @@ Handle<String> DynamicObject::s_enumerate;
 
 DynamicObject::DynamicObject()
 {
+	Isolate* isolate = Isolate::GetCurrent();
+	Undef(get);
+	Undef(set);
+	Undef(query);
+	Undef(delete);
+	Undef(enumerate);
 }
 
 DynamicObject::~DynamicObject()
@@ -141,49 +153,51 @@ void DynamicObject::New(const FunctionCallbackInfo<Value>& args)
 	args.GetReturnValue().Set(args.This());
 }
 
-void DynamicObject::Get(v8::Local<v8::String> property, const v8::PropertyCallbackInfo<v8::Value>& info)
+void DynamicObject::Get(Local<String> property, const PropertyCallbackInfo<Value>& info)
 {
 	Isolate* isolate = Isolate::GetCurrent();
 	HandleScope scope(isolate);
 	DynamicObject* obj = ObjectWrap::Unwrap<DynamicObject>(info.This());
 
 	// check internal properties
+	String::Utf8Value u8prop(property);
 	GET_HANDLER_PROP(get);
 	GET_HANDLER_PROP(set);
 	GET_HANDLER_PROP(query);
 	GET_HANDLER_PROP(delete);
 	GET_HANDLER_PROP(enumerate);
 
-	if(obj->get_->IsUndefined() || !obj->get_->IsFunction()){
+	CHECK(get){
 		info.GetReturnValue().Set(Undefined(isolate));
 		return;
 	}
 	// call javascript handler
-	CallHandler<Value>(obj->get_, property);
+	HANDLE(CallHandler<Value>(fn, property));
 }
 
-void DynamicObject::Set(v8::Local<v8::String> property, v8::Local<v8::Value> value, const v8::PropertyCallbackInfo<v8::Value>& info)
+void DynamicObject::Set(Local<String> property, Local<Value> value, const PropertyCallbackInfo<Value>& info)
 {
 	Isolate* isolate = Isolate::GetCurrent();
 	HandleScope scope(isolate);
 	DynamicObject* obj = ObjectWrap::Unwrap<DynamicObject>(info.This());
 
 	// check internal properties
+	String::Utf8Value u8prop(property);
 	SET_HANDLER_PROP(get, value);
 	SET_HANDLER_PROP(set, value);
 	SET_HANDLER_PROP(query, value);
 	SET_HANDLER_PROP(delete, value);
 	SET_HANDLER_PROP(enumerate, value);
 
-	if(obj->set_->IsUndefined() || !obj->set_->IsFunction()){
+	CHECK(set){
 		info.GetReturnValue().Set(Undefined(isolate));
 		return;
 	}
 	// call javascript handler
-	CallHandler<Value>(obj->set_, property, value);
+	HANDLE(CallHandler<Value>(fn, property, value));
 }
 
-void DynamicObject::Query(v8::Local<v8::String> property, const v8::PropertyCallbackInfo<v8::Integer>& info)
+void DynamicObject::Query(Local<String> property, const PropertyCallbackInfo<Integer>& info)
 {
 	Isolate* isolate = Isolate::GetCurrent();
 	HandleScope scope(isolate);
@@ -196,15 +210,15 @@ void DynamicObject::Query(v8::Local<v8::String> property, const v8::PropertyCall
 	}
 
 	DynamicObject* obj = ObjectWrap::Unwrap<DynamicObject>(info.This());
-	if(obj->query_->IsUndefined() || !obj->query_->IsFunction()){
+	CHECK(query){
 		info.GetReturnValue().Set(None);
 		return;
 	}
 	// call javascript handler
-	CallHandler<Integer>(obj->query_, property);
+	HANDLE(CallHandler<Integer>(fn, property));
 }
 
-void DynamicObject::Delete(v8::Local<v8::String> property, const v8::PropertyCallbackInfo<v8::Boolean>& info)
+void DynamicObject::Delete(Local<String> property, const PropertyCallbackInfo<Boolean>& info)
 {
 	Isolate* isolate = Isolate::GetCurrent();
 	HandleScope scope(isolate);
@@ -217,25 +231,25 @@ void DynamicObject::Delete(v8::Local<v8::String> property, const v8::PropertyCal
 	}
 
 	DynamicObject* obj = ObjectWrap::Unwrap<DynamicObject>(info.This());
-	if(obj->delete_->IsUndefined() || !obj->delete_->IsFunction()){
+	CHECK(delete){
 		info.GetReturnValue().Set(false);
 		return;
 	}
 	// call javascript handler
-	CallHandler<Boolean>(obj->delete_, property);
+	HANDLE(CallHandler<Boolean>(fn, property));
 }
 
-void DynamicObject::Enumerate(const v8::PropertyCallbackInfo<v8::Array>& info)
+void DynamicObject::Enumerate(const PropertyCallbackInfo<Array>& info)
 {
 	Isolate* isolate = Isolate::GetCurrent();
 	HandleScope scope(isolate);
 
 	DynamicObject* obj = ObjectWrap::Unwrap<DynamicObject>(info.This());
-	if(obj->enumerate_->IsUndefined() || !obj->enumerate_->IsFunction()){
+	CHECK(enumerate){
 		info.GetReturnValue().Set(Array::New(isolate));
 		return;
 	}
 	// call javascript handler
-	CallHandler<Array>(obj->enumerate_);
+	HANDLE(CallHandler<Array>(fn));
 }
 
