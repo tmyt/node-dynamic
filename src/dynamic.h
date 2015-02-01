@@ -26,6 +26,7 @@ private:
 	static void Enumerate(const v8::PropertyCallbackInfo<v8::Array>& info);
 
 	/// Instance fields
+	v8::Persistent<v8::Value> super_;
 	v8::Persistent<v8::Value> get_;
 	v8::Persistent<v8::Value> set_;
 	v8::Persistent<v8::Value> query_;

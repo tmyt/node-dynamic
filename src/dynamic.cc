@@ -72,6 +72,7 @@ Persistent<Function> DynamicObject::constructor;
 DynamicObject::DynamicObject()
 {
 	Isolate* isolate = Isolate::GetCurrent();
+	Undef(super);
 	Undef(get);
 	Undef(set);
 	Undef(query);
@@ -81,7 +82,7 @@ DynamicObject::DynamicObject()
 
 DynamicObject::~DynamicObject() { }
 
-void DynamicObject::Init(Handle<Object> exports, Handle<Object> module)
+/* static */ void DynamicObject::Init(Handle<Object> exports, Handle<Object> module)
 {
 	Isolate* isolate = Isolate::GetCurrent();
 
@@ -94,23 +95,37 @@ void DynamicObject::Init(Handle<Object> exports, Handle<Object> module)
 	// Prototype
 	constructor.Reset(isolate, tpl->GetFunction());
 	module->Set(String::NewFromUtf8(isolate, "exports"),
-	             tpl->GetFunction());
+				 tpl->GetFunction());
 }
 
-void DynamicObject::New(const FunctionCallbackInfo<Value>& args)
+/* static */ void DynamicObject::New(const FunctionCallbackInfo<Value>& args)
 {
+	Isolate* isolate = Isolate::GetCurrent();
+
 	if(!args.IsConstructCall()) return;
 	// Construct object
 	DynamicObject* obj = new DynamicObject();
+	if(args[0]->IsObject()){
+		obj->super_.Reset(isolate, args[0]);
+	}
 	obj->Wrap(args.This());
 	args.GetReturnValue().Set(args.This());
 }
 
-void DynamicObject::Get(Local<String> property, const PropertyCallbackInfo<Value>& info)
+/* static */ void DynamicObject::Get(Local<String> property, const PropertyCallbackInfo<Value>& info)
 {
 	Prologue(info);
-	// check internal properties
 	String::Utf8Value u8prop(property);
+	// check super-class members
+	LocalValue(super, obj->super_);
+	if(super->IsObject()){
+		Local<Object> s = super->ToObject();
+		if(s->Has(property)){
+			info.GetReturnValue().Set(s->Get(property));
+			return;
+		}
+	}
+	// check internal properties
 	GET_HANDLER_PROP_STATIC(valueOf, info.This());
 	GET_HANDLER_PROP_STATIC(inspect, Undefined(isolate));
 	GET_HANDLER_PROP(get);
@@ -126,11 +141,20 @@ void DynamicObject::Get(Local<String> property, const PropertyCallbackInfo<Value
 	HANDLE(CallHandler<Value>(fn, property));
 }
 
-void DynamicObject::Set(Local<String> property, Local<Value> value, const PropertyCallbackInfo<Value>& info)
+/* static */ void DynamicObject::Set(Local<String> property, Local<Value> value, const PropertyCallbackInfo<Value>& info)
 {
 	Prologue(info);
-	// check internal properties
 	String::Utf8Value u8prop(property);
+	// check super-class members
+	LocalValue(super, obj->super_);
+	if(super->IsObject()){
+		Local<Object> s = super->ToObject();
+		if(s->Has(property)){
+			info.GetReturnValue().Set(s->Get(property));
+			return;
+		}
+	}
+	// check internal properties
 	SET_HANDLER_PROP(get, value);
 	SET_HANDLER_PROP(set, value);
 	SET_HANDLER_PROP(query, value);
@@ -144,7 +168,7 @@ void DynamicObject::Set(Local<String> property, Local<Value> value, const Proper
 	HANDLE(CallHandler<Value>(fn, property, value));
 }
 
-void DynamicObject::Query(Local<String> property, const PropertyCallbackInfo<Integer>& info)
+/* static */ void DynamicObject::Query(Local<String> property, const PropertyCallbackInfo<Integer>& info)
 {
 	Prologue(info);
 	String::Utf8Value u8prop(property);
@@ -162,7 +186,7 @@ void DynamicObject::Query(Local<String> property, const PropertyCallbackInfo<Int
 	HANDLE(CallHandler<Integer>(fn, property));
 }
 
-void DynamicObject::Delete(Local<String> property, const PropertyCallbackInfo<Boolean>& info)
+/* static */ void DynamicObject::Delete(Local<String> property, const PropertyCallbackInfo<Boolean>& info)
 {
 	Prologue(info);
 	String::Utf8Value u8prop(property);
@@ -180,7 +204,7 @@ void DynamicObject::Delete(Local<String> property, const PropertyCallbackInfo<Bo
 	HANDLE(CallHandler<Boolean>(fn, property));
 }
 
-void DynamicObject::Enumerate(const PropertyCallbackInfo<Array>& info)
+/* static */ void DynamicObject::Enumerate(const PropertyCallbackInfo<Array>& info)
 {
 	Prologue(info);
 	CHECK(enumerate){
