@@ -55,6 +55,8 @@ Local<Boolean> CallHandler(Local<Value> fn_, const Local<Value>& arg1)
 	if(NC(name)) { obj->name##_.Reset(isolate, value); info.GetReturnValue().Set(value); return; }
 #define IS_INTERNAL_PROP \
 	NC(get)||NC(set)||NC(query)||NC(delete)||NC(enumerate)
+#define GET_HANDLER_PROP_STATIC(name, value) \
+	if(NC(name)) { info.GetReturnValue().Set(value); return; }
 
 #define CHECK(x) LocalFunc(x); if(fn->IsUndefined() || !fn->IsFunction())
 #define HANDLE(x) info.GetReturnValue().Set(x)
@@ -109,6 +111,8 @@ void DynamicObject::Get(Local<String> property, const PropertyCallbackInfo<Value
 	Prologue(info);
 	// check internal properties
 	String::Utf8Value u8prop(property);
+	GET_HANDLER_PROP_STATIC(valueOf, info.This());
+	GET_HANDLER_PROP_STATIC(inspect, Undefined(isolate));
 	GET_HANDLER_PROP(get);
 	GET_HANDLER_PROP(set);
 	GET_HANDLER_PROP(query);
