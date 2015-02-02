@@ -5,46 +5,43 @@
 
 using namespace v8;
 
-#define ISOLATE(x,y) Isolate* x = Isolate::GetCurrent(); Local<Context> y = Context::New(x)
+#define ISOLATE(x,y) Isolate* x = Isolate::GetCurrent()
 #define CASTFN(x, y) Local<Function> x = Local<Function>::Cast(y)
 
 template<typename T>
-Local<T> CallHandler(Local<Value> fn_)
+Local<T> CallHandler(Local<Value> thiz, Local<Value> fn_)
 {
-	ISOLATE(isolate, context);
 	CASTFN(fn, fn_);
 	Local<Value> argv[] = { };
-	Local<Value> ret = fn->Call(context->Global(), 0, argv);
+	Local<Value> ret = fn->Call(thiz, 0, argv);
 	return Handle<T>::Cast(ret);
 }
 
 template<typename T>
-Local<T> CallHandler(Local<Value> fn_, const Local<Value>& arg1)
+Local<T> CallHandler(Local<Value> thiz, Local<Value> fn_, const Local<Value>& arg1)
 {
-	ISOLATE(isolate, context);
 	CASTFN(fn, fn_);
 	Local<Value> argv[] = { arg1 };
-	Local<Value> ret = fn->Call(context->Global(), 1, argv);
+	Local<Value> ret = fn->Call(thiz, 1, argv);
 	return Handle<T>::Cast(ret);
 }
 
 template<typename T>
-Local<T> CallHandler(Local<Value> fn_, const Local<Value>& arg1, const Local<Value>& arg2)
+Local<T> CallHandler(Local<Value> thiz, Local<Value> fn_, const Local<Value>& arg1, const Local<Value>& arg2)
 {
-	ISOLATE(isolate, context);
 	CASTFN(fn, fn_);
 	Local<Value> argv[] = { arg1, arg2 };
-	Local<Value> ret = fn->Call(context->Global(), 2, argv);
+	Local<Value> ret = fn->Call(thiz, 2, argv);
 	return Handle<T>::Cast(ret);
 }
 
 template<>
-Local<Boolean> CallHandler(Local<Value> fn_, const Local<Value>& arg1)
+Local<Boolean> CallHandler(Local<Value> thiz, Local<Value> fn_, const Local<Value>& arg1)
 {
 	ISOLATE(isolate, context);
 	CASTFN(fn, fn_);
 	Local<Value> argv[] = { arg1 };
-	Local<Value> ret = fn->Call(context->Global(), 1, argv);
+	Local<Value> ret = fn->Call(thiz, 1, argv);
 	return Boolean::New(isolate, ret->BooleanValue());
 }
 
@@ -58,14 +55,22 @@ Local<Boolean> CallHandler(Local<Value> fn_, const Local<Value>& arg1)
 #define GET_HANDLER_PROP_STATIC(name, value) \
 	if(NC(name)) { info.GetReturnValue().Set(value); return; }
 
-#define CHECK(x) LocalFunc(x); if(fn->IsUndefined() || !fn->IsFunction())
+#define SafeCast(_Ty, _Val) 
+
+#define CHECK(x) \
+	LocalFunc(x); \
+	if( (fn->IsUndefined() || !fn->IsFunction()) && \
+	    (!super->IsObject() || !(fn = super->ToObject()->Get(String::NewFromUtf8(isolate, #x)))->IsFunction()) )
 #define HANDLE(x) info.GetReturnValue().Set(x)
 
 #define Undef(x) x##_.Reset(isolate, Undefined(isolate))
 #define LocalValue(x, y) Local<Value> x = Local<Value>::New(isolate, y)
 #define LocalFunc(x) LocalValue(fn, obj->x##_)
 
-#define Prologue(x) Isolate* isolate = Isolate::GetCurrent(); DynamicObject* obj = ObjectWrap::Unwrap<DynamicObject>(x.This())
+#define Prologue(x) \
+	Isolate* isolate = Isolate::GetCurrent();\
+	DynamicObject* obj = ObjectWrap::Unwrap<DynamicObject>(x.This());\
+	LocalValue(super, obj->super_)
 
 Persistent<Function> DynamicObject::constructor;
 
@@ -117,7 +122,6 @@ DynamicObject::~DynamicObject() { }
 	Prologue(info);
 	String::Utf8Value u8prop(property);
 	// check super-class members
-	LocalValue(super, obj->super_);
 	if(super->IsObject()){
 		Local<Object> s = super->ToObject();
 		if(s->Has(property)){
@@ -138,7 +142,7 @@ DynamicObject::~DynamicObject() { }
 		return;
 	}
 	// call javascript handler
-	HANDLE(CallHandler<Value>(fn, property));
+	HANDLE(CallHandler<Value>(info.This(), fn, property));
 }
 
 /* static */ void DynamicObject::Set(Local<String> property, Local<Value> value, const PropertyCallbackInfo<Value>& info)
@@ -146,7 +150,6 @@ DynamicObject::~DynamicObject() { }
 	Prologue(info);
 	String::Utf8Value u8prop(property);
 	// check super-class members
-	LocalValue(super, obj->super_);
 	if(super->IsObject()){
 		Local<Object> s = super->ToObject();
 		if(s->Has(property)){
@@ -166,7 +169,7 @@ DynamicObject::~DynamicObject() { }
 		return;
 	}
 	// call javascript handler
-	HANDLE(CallHandler<Value>(fn, property, value));
+	HANDLE(CallHandler<Value>(info.This(), fn, property, value));
 }
 
 /* static */ void DynamicObject::Query(Local<String> property, const PropertyCallbackInfo<Integer>& info)
@@ -184,7 +187,7 @@ DynamicObject::~DynamicObject() { }
 		return;
 	}
 	// call javascript handler
-	HANDLE(CallHandler<Integer>(fn, property));
+	HANDLE(CallHandler<Integer>(info.This(), fn, property));
 }
 
 /* static */ void DynamicObject::Delete(Local<String> property, const PropertyCallbackInfo<Boolean>& info)
@@ -202,7 +205,7 @@ DynamicObject::~DynamicObject() { }
 		return;
 	}
 	// call javascript handler
-	HANDLE(CallHandler<Boolean>(fn, property));
+	HANDLE(CallHandler<Boolean>(info.This(), fn, property));
 }
 
 /* static */ void DynamicObject::Enumerate(const PropertyCallbackInfo<Array>& info)
@@ -213,6 +216,6 @@ DynamicObject::~DynamicObject() { }
 		return;
 	}
 	// call javascript handler
-	HANDLE(CallHandler<Array>(fn));
+	HANDLE(CallHandler<Array>(info.This(), fn));
 }
 

@@ -22,11 +22,15 @@ console.log("d.a = ", d.a);
 console.log("d.prototype = ", d.prototype);
 d.prototype.hoge();
 
-var p = { a: function() { return 20; } };
+var p = {
+  a: function() { return 20; },
+  get: function() { return 30; },
+};
 var d = new Dynamic(p);
 
 console.log("d = ", d);
 console.log("p = ", p);
 console.log("d.a = ", d.a);
 console.log("d.a() = ", d.a());
+console.log("d.b = ", d.b);
 
