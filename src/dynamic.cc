@@ -150,7 +150,8 @@ DynamicObject::~DynamicObject() { }
 	if(super->IsObject()){
 		Local<Object> s = super->ToObject();
 		if(s->Has(property)){
-			info.GetReturnValue().Set(s->Get(property));
+			s->Set(property, value);
+			info.GetReturnValue().Set(value);
 			return;
 		}
 	}
