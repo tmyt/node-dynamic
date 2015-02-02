@@ -45,17 +45,17 @@ Local<Boolean> CallHandler(Local<Value> thiz, Local<Value> fn_, const Local<Valu
 	return Boolean::New(isolate, ret->BooleanValue());
 }
 
-#define NC(x) !strcmp(*u8prop, #x)
+#define NC(x) !strcmp(prop, #x)
 #define GET_HANDLER_PROP(name) \
 	if(NC(name)) { info.GetReturnValue().Set(Local<Value>::New(isolate, obj->name##_)); return; }
 #define SET_HANDLER_PROP(name, value) \
 	if(NC(name)) { obj->name##_.Reset(isolate, value); info.GetReturnValue().Set(value); return; }
 #define IS_INTERNAL_PROP \
-	NC(get)||NC(set)||NC(query)||NC(delete)||NC(enumerate)
+	PRECHECK_COND && (NC(get)||NC(set)||NC(query)||NC(delete)||NC(enumerate))
 #define GET_HANDLER_PROP_STATIC(name, value) \
 	if(NC(name)) { info.GetReturnValue().Set(value); return; }
-
-#define SafeCast(_Ty, _Val) 
+#define PRECHECK_COND (*prop == 'g' || *prop == 's' || *prop == 'd' || *prop == 'e' || *prop == 'q')
+#define PRECHECK() if(PRECHECK_COND)
 
 #define CHECK(x) \
 	LocalFunc(x); \
@@ -70,7 +70,10 @@ Local<Boolean> CallHandler(Local<Value> thiz, Local<Value> fn_, const Local<Valu
 #define Prologue(x) \
 	Isolate* isolate = Isolate::GetCurrent();\
 	DynamicObject* obj = ObjectWrap::Unwrap<DynamicObject>(x.This());\
-	LocalValue(super, obj->super_)
+	LocalValue(super, obj->super_);
+#define Prop() \
+	String::Utf8Value u8prop(property); \
+	const char* prop = *u8prop
 
 Persistent<Function> DynamicObject::constructor;
 
@@ -120,7 +123,7 @@ DynamicObject::~DynamicObject() { }
 /* static */ void DynamicObject::Get(Local<String> property, const PropertyCallbackInfo<Value>& info)
 {
 	Prologue(info);
-	String::Utf8Value u8prop(property);
+	Prop();
 	// check super-class members
 	if(super->IsObject()){
 		Local<Object> s = super->ToObject();
@@ -132,11 +135,13 @@ DynamicObject::~DynamicObject() { }
 	// check internal properties
 	GET_HANDLER_PROP_STATIC(valueOf, info.This());
 	GET_HANDLER_PROP_STATIC(inspect, Undefined(isolate));
-	GET_HANDLER_PROP(get);
-	GET_HANDLER_PROP(set);
-	GET_HANDLER_PROP(query);
-	GET_HANDLER_PROP(delete);
-	GET_HANDLER_PROP(enumerate);
+	PRECHECK(){
+		GET_HANDLER_PROP(get);
+		GET_HANDLER_PROP(set);
+		GET_HANDLER_PROP(query);
+		GET_HANDLER_PROP(delete);
+		GET_HANDLER_PROP(enumerate);
+	}
 	CHECK(get){
 		info.GetReturnValue().Set(Undefined(isolate));
 		return;
@@ -148,7 +153,7 @@ DynamicObject::~DynamicObject() { }
 /* static */ void DynamicObject::Set(Local<String> property, Local<Value> value, const PropertyCallbackInfo<Value>& info)
 {
 	Prologue(info);
-	String::Utf8Value u8prop(property);
+	Prop();
 	// check super-class members
 	if(super->IsObject()){
 		Local<Object> s = super->ToObject();
@@ -159,11 +164,13 @@ DynamicObject::~DynamicObject() { }
 		}
 	}
 	// check internal properties
-	SET_HANDLER_PROP(get, value);
-	SET_HANDLER_PROP(set, value);
-	SET_HANDLER_PROP(query, value);
-	SET_HANDLER_PROP(delete, value);
-	SET_HANDLER_PROP(enumerate, value);
+	PRECHECK(){
+		SET_HANDLER_PROP(get, value);
+		SET_HANDLER_PROP(set, value);
+		SET_HANDLER_PROP(query, value);
+		SET_HANDLER_PROP(delete, value);
+		SET_HANDLER_PROP(enumerate, value);
+	}
 	CHECK(set){
 		info.GetReturnValue().Set(Undefined(isolate));
 		return;
@@ -175,7 +182,7 @@ DynamicObject::~DynamicObject() { }
 /* static */ void DynamicObject::Query(Local<String> property, const PropertyCallbackInfo<Integer>& info)
 {
 	Prologue(info);
-	String::Utf8Value u8prop(property);
+	Prop();
 	// check internal properties
 	if(IS_INTERNAL_PROP){
 		// internal properties always return static value
@@ -193,7 +200,7 @@ DynamicObject::~DynamicObject() { }
 /* static */ void DynamicObject::Delete(Local<String> property, const PropertyCallbackInfo<Boolean>& info)
 {
 	Prologue(info);
-	String::Utf8Value u8prop(property);
+	Prop();
 	// check internal properties
 	if(IS_INTERNAL_PROP){
 		// internal properties always return static value
