@@ -9,7 +9,7 @@ using namespace v8;
 #define CASTFN(x, y) Local<Function> x = Local<Function>::Cast(y)
 
 template<typename T>
-Local<T> CallHandler(Local<Value> thiz, Local<Value> fn_)
+Local<T> CallHandler(const Local<Value>& thiz, const Local<Value>& fn_)
 {
 	CASTFN(fn, fn_);
 	Local<Value> argv[] = { };
@@ -18,7 +18,7 @@ Local<T> CallHandler(Local<Value> thiz, Local<Value> fn_)
 }
 
 template<typename T>
-Local<T> CallHandler(Local<Value> thiz, Local<Value> fn_, const Local<Value>& arg1)
+Local<T> CallHandler(const Local<Value>& thiz, const Local<Value>& fn_, const Local<Value>& arg1)
 {
 	CASTFN(fn, fn_);
 	Local<Value> argv[] = { arg1 };
@@ -27,7 +27,7 @@ Local<T> CallHandler(Local<Value> thiz, Local<Value> fn_, const Local<Value>& ar
 }
 
 template<typename T>
-Local<T> CallHandler(Local<Value> thiz, Local<Value> fn_, const Local<Value>& arg1, const Local<Value>& arg2)
+Local<T> CallHandler(const Local<Value>& thiz, const Local<Value>& fn_, const Local<Value>& arg1, const Local<Value>& arg2)
 {
 	CASTFN(fn, fn_);
 	Local<Value> argv[] = { arg1, arg2 };
@@ -36,7 +36,15 @@ Local<T> CallHandler(Local<Value> thiz, Local<Value> fn_, const Local<Value>& ar
 }
 
 template<>
-Local<Boolean> CallHandler(Local<Value> thiz, Local<Value> fn_, const Local<Value>& arg1)
+Local<Value> CallHandler(const Local<Value>& thiz, const Local<Value>& fn_, const Local<Value>& arg1)
+{
+	CASTFN(fn, fn_);
+	Local<Value> argv[] = { arg1 };
+	return fn->Call(thiz, 1, argv);
+}
+
+template<>
+Local<Boolean> CallHandler(const Local<Value>& thiz, const Local<Value>& fn_, const Local<Value>& arg1)
 {
 	ISOLATE(isolate, context);
 	CASTFN(fn, fn_);
@@ -45,22 +53,23 @@ Local<Boolean> CallHandler(Local<Value> thiz, Local<Value> fn_, const Local<Valu
 	return Boolean::New(isolate, ret->BooleanValue());
 }
 
-#define NC(x) !strcmp(prop, #x)
+#define NC_(x, xx) !strcmp(x, (#xx)+1)
+#define NC(x) NC_(prop+1, x)
+#define NC2(x, xx) (*prop == x && NC(xx))
 #define GET_HANDLER_PROP(name) \
-	if(NC(name)) { info.GetReturnValue().Set(Local<Value>::New(isolate, obj->name##_)); return; }
-#define SET_HANDLER_PROP(name, value) \
-	if(NC(name)) { obj->name##_.Reset(isolate, value); info.GetReturnValue().Set(value); return; }
-#define IS_INTERNAL_PROP \
-	PRECHECK_COND && (NC(get)||NC(set)||NC(query)||NC(delete)||NC(enumerate))
+	if(NC_(prop, name)) { info.GetReturnValue().Set(Local<Value>::New(isolate, obj->name##_)); return; }
 #define GET_HANDLER_PROP_STATIC(name, value) \
-	if(NC(name)) { info.GetReturnValue().Set(value); return; }
-#define PRECHECK_COND (*prop == 'g' || *prop == 's' || *prop == 'd' || *prop == 'e' || *prop == 'q')
-#define PRECHECK() if(PRECHECK_COND)
+	if(NC_(prop, name)) { info.GetReturnValue().Set(value); return; }
+#define SET_HANDLER_PROP(name, value) \
+	if(NC_(prop, name)) { obj->name##_.Reset(isolate, value); info.GetReturnValue().Set(value); return; }
+#define IS_INTERNAL_PROP \
+	NC2('g', get) || NC2('s', set) || NC2('q', query) || NC2('d', delete) || NC2('e', enumerate)
+#define PRECHECK() if(*prop == 'g' || *prop == 's' || *prop == 'd' || *prop == 'e' || *prop == 'q')
 
 #define CHECK(x) \
 	LocalFunc(x); \
 	if( !fn->IsFunction() && \
-	    (!obj->has_super_ || !(fn = super->Get(String::NewFromUtf8(isolate, #x)))->IsFunction()) )
+	    (!obj->has_super_ || !(fn = super->Get(Local<String>::New(isolate, property_names_[K_##x])))->IsFunction()) )
 #define HANDLE(x) info.GetReturnValue().Set(x)
 
 #define Undef(x) x##_.Reset(isolate, Undefined(isolate))
@@ -74,17 +83,23 @@ Local<Boolean> CallHandler(Local<Value> thiz, Local<Value> fn_, const Local<Valu
 #define Prop() \
 	String::Utf8Value u8prop(property); \
 	const char* prop = *u8prop
+#define Each(x) x(get); x(set); x(query); x(delete); x(enumerate)
 
+enum{
+	K_get = 0,
+	K_set,
+	K_query,
+	K_delete,
+	K_enumerate,
+};
+
+Persistent<String> DynamicObject::property_names_[5];
 Persistent<Function> DynamicObject::constructor;
 
 DynamicObject::DynamicObject() : has_super_(false)
 {
 	Isolate* isolate = Isolate::GetCurrent();
-	Undef(get);
-	Undef(set);
-	Undef(query);
-	Undef(delete);
-	Undef(enumerate);
+	Each(Undef);
 }
 
 DynamicObject::~DynamicObject() { }
@@ -92,7 +107,9 @@ DynamicObject::~DynamicObject() { }
 /* static */ void DynamicObject::Init(Handle<Object> exports, Handle<Object> module)
 {
 	Isolate* isolate = Isolate::GetCurrent();
-
+#define n(x) property_names_[K_##get].Reset(isolate, String::NewFromUtf8(isolate, #x))
+	Each(n);
+#undef n
 	// Prepare constructor template
 	Local<FunctionTemplate> tpl = FunctionTemplate::New(isolate, New);
 	tpl->SetClassName(String::NewFromUtf8(isolate, "DynamicObject"));
@@ -130,14 +147,14 @@ DynamicObject::~DynamicObject() { }
 		return;
 	}
 	// check internal properties
-	if(PRECHECK_COND || *prop == 'v' || *prop == 'i'){
-		GET_HANDLER_PROP_STATIC(valueOf, info.This());
-		GET_HANDLER_PROP_STATIC(inspect, Undefined(isolate));
-		GET_HANDLER_PROP(get);
-		GET_HANDLER_PROP(set);
-		GET_HANDLER_PROP(query);
-		GET_HANDLER_PROP(delete);
-		GET_HANDLER_PROP(enumerate);
+	switch(*prop++){
+		case 'g': GET_HANDLER_PROP(get); break;
+		case 's': GET_HANDLER_PROP(set); break;
+		case 'q': GET_HANDLER_PROP(query); break;
+		case 'd': GET_HANDLER_PROP(delete); break;
+		case 'e': GET_HANDLER_PROP(enumerate); break;
+		case 'v': GET_HANDLER_PROP_STATIC(valueOf, info.This()); break;
+		case 'i': GET_HANDLER_PROP_STATIC(inspect, Undefined(isolate)); break;
 	}
 	CHECK(get){
 		info.GetReturnValue().Set(Undefined(isolate));
@@ -158,12 +175,12 @@ DynamicObject::~DynamicObject() { }
 		return;
 	}
 	// check internal properties
-	PRECHECK(){
-		SET_HANDLER_PROP(get, value);
-		SET_HANDLER_PROP(set, value);
-		SET_HANDLER_PROP(query, value);
-		SET_HANDLER_PROP(delete, value);
-		SET_HANDLER_PROP(enumerate, value);
+	switch(*prop++){
+		case 'g': SET_HANDLER_PROP(get, value); break;
+		case 's': SET_HANDLER_PROP(set, value); break;
+		case 'q': SET_HANDLER_PROP(query, value); break;
+		case 'd': SET_HANDLER_PROP(delete, value); break;
+		case 'e': SET_HANDLER_PROP(enumerate, value); break;
 	}
 	CHECK(set){
 		info.GetReturnValue().Set(Undefined(isolate));

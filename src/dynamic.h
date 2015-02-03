@@ -25,6 +25,9 @@ private:
 	static void Delete(v8::Local<v8::String> property, const v8::PropertyCallbackInfo<v8::Boolean>& info);
 	static void Enumerate(const v8::PropertyCallbackInfo<v8::Array>& info);
 
+	/// Static fields
+	static v8::Persistent<v8::String> property_names_[5];
+
 	/// Instance fields
 	v8::Persistent<v8::Object> super_;
 	v8::Persistent<v8::Value> get_;
