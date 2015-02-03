@@ -107,7 +107,7 @@ DynamicObject::~DynamicObject() { }
 /* static */ void DynamicObject::Init(Handle<Object> exports, Handle<Object> module)
 {
 	Isolate* isolate = Isolate::GetCurrent();
-#define n(x) property_names_[K_##get].Reset(isolate, String::NewFromUtf8(isolate, #x))
+#define n(x) property_names_[K_##x].Reset(isolate, String::NewFromUtf8(isolate, #x))
 	Each(n);
 #undef n
 	// Prepare constructor template
