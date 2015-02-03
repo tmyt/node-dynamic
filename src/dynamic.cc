@@ -60,7 +60,7 @@ Local<Boolean> CallHandler(Local<Value> thiz, Local<Value> fn_, const Local<Valu
 #define CHECK(x) \
 	LocalFunc(x); \
 	if( (fn->IsUndefined() || !fn->IsFunction()) && \
-	    (!super->IsObject() || !(fn = super->ToObject()->Get(String::NewFromUtf8(isolate, #x)))->IsFunction()) )
+	    (!obj->has_super_ || !(fn = super->Get(String::NewFromUtf8(isolate, #x)))->IsFunction()) )
 #define HANDLE(x) info.GetReturnValue().Set(x)
 
 #define Undef(x) x##_.Reset(isolate, Undefined(isolate))
@@ -70,17 +70,16 @@ Local<Boolean> CallHandler(Local<Value> thiz, Local<Value> fn_, const Local<Valu
 #define Prologue(x) \
 	Isolate* isolate = Isolate::GetCurrent();\
 	DynamicObject* obj = ObjectWrap::Unwrap<DynamicObject>(x.This());\
-	LocalValue(super, obj->super_);
+	Local<Object> super = Local<Object>::New(isolate, obj->super_)
 #define Prop() \
 	String::Utf8Value u8prop(property); \
 	const char* prop = *u8prop
 
 Persistent<Function> DynamicObject::constructor;
 
-DynamicObject::DynamicObject()
+DynamicObject::DynamicObject() : has_super_(false)
 {
 	Isolate* isolate = Isolate::GetCurrent();
-	Undef(super);
 	Undef(get);
 	Undef(set);
 	Undef(query);
@@ -114,7 +113,8 @@ DynamicObject::~DynamicObject() { }
 	// Construct object
 	DynamicObject* obj = new DynamicObject();
 	if(args[0]->IsObject()){
-		obj->super_.Reset(isolate, args[0]);
+		obj->has_super_ = true;
+		obj->super_.Reset(isolate, args[0]->ToObject());
 	}
 	obj->Wrap(args.This());
 	args.GetReturnValue().Set(args.This());
@@ -125,12 +125,9 @@ DynamicObject::~DynamicObject() { }
 	Prologue(info);
 	Prop();
 	// check super-class members
-	if(super->IsObject()){
-		Local<Object> s = super->ToObject();
-		if(s->Has(property)){
-			info.GetReturnValue().Set(s->Get(property));
-			return;
-		}
+	if(obj->has_super_ && super->Has(property)){
+		info.GetReturnValue().Set(super->Get(property));
+		return;
 	}
 	// check internal properties
 	GET_HANDLER_PROP_STATIC(valueOf, info.This());
@@ -155,13 +152,10 @@ DynamicObject::~DynamicObject() { }
 	Prologue(info);
 	Prop();
 	// check super-class members
-	if(super->IsObject()){
-		Local<Object> s = super->ToObject();
-		if(s->Has(property)){
-			s->Set(property, value);
-			info.GetReturnValue().Set(value);
-			return;
-		}
+	if(obj->has_super_ && super->Has(property)){
+		super->Set(property, value);
+		info.GetReturnValue().Set(value);
+		return;
 	}
 	// check internal properties
 	PRECHECK(){
