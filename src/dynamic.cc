@@ -59,7 +59,7 @@ Local<Boolean> CallHandler(Local<Value> thiz, Local<Value> fn_, const Local<Valu
 
 #define CHECK(x) \
 	LocalFunc(x); \
-	if( (fn->IsUndefined() || !fn->IsFunction()) && \
+	if( !fn->IsFunction() && \
 	    (!obj->has_super_ || !(fn = super->Get(String::NewFromUtf8(isolate, #x)))->IsFunction()) )
 #define HANDLE(x) info.GetReturnValue().Set(x)
 
@@ -130,9 +130,9 @@ DynamicObject::~DynamicObject() { }
 		return;
 	}
 	// check internal properties
-	GET_HANDLER_PROP_STATIC(valueOf, info.This());
-	GET_HANDLER_PROP_STATIC(inspect, Undefined(isolate));
-	PRECHECK(){
+	if(PRECHECK_COND || *prop == 'v' || *prop == 'i'){
+		GET_HANDLER_PROP_STATIC(valueOf, info.This());
+		GET_HANDLER_PROP_STATIC(inspect, Undefined(isolate));
 		GET_HANDLER_PROP(get);
 		GET_HANDLER_PROP(set);
 		GET_HANDLER_PROP(query);
