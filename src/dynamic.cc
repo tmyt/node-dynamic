@@ -5,15 +5,13 @@
 
 using namespace v8;
 
-#define ISOLATE(x,y) Isolate* x = Isolate::GetCurrent()
 #define CASTFN(x, y) Local<Function> x = Local<Function>::Cast(y)
 
 template<typename T>
 Local<T> CallHandler(const Local<Value>& thiz, const Local<Value>& fn_)
 {
 	CASTFN(fn, fn_);
-	Local<Value> argv[] = { };
-	Local<Value> ret = fn->Call(thiz, 0, argv);
+	Local<Value> ret = fn->Call(thiz, 0, 0);
 	return Handle<T>::Cast(ret);
 }
 
@@ -46,7 +44,7 @@ Local<Value> CallHandler(const Local<Value>& thiz, const Local<Value>& fn_, cons
 template<>
 Local<Boolean> CallHandler(const Local<Value>& thiz, const Local<Value>& fn_, const Local<Value>& arg1)
 {
-	ISOLATE(isolate, context);
+	Isolate* isolate = Isolate::GetCurrent();
 	CASTFN(fn, fn_);
 	Local<Value> argv[] = { arg1 };
 	Local<Value> ret = fn->Call(thiz, 1, argv);
