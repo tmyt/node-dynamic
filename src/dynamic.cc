@@ -151,7 +151,7 @@ DynamicObject::~DynamicObject() { }
 		case 'q': GET_HANDLER_PROP(query); break;
 		case 'd': GET_HANDLER_PROP(delete); break;
 		case 'e': GET_HANDLER_PROP(enumerate); break;
-		case 'v': GET_HANDLER_PROP_STATIC(valueOf, info.This()); break;
+		case 'v': GET_HANDLER_PROP_STATIC(valueOf, FunctionTemplate::New(isolate, ValueOf)->GetFunction()); break;
 		case 'i': GET_HANDLER_PROP_STATIC(inspect, Undefined(isolate)); break;
 	}
 	CHECK(get){
@@ -233,5 +233,10 @@ DynamicObject::~DynamicObject() { }
 	}
 	// call javascript handler
 	HANDLE(CallHandler<Array>(info.This(), fn));
+}
+
+/* static */ void DynamicObject::ValueOf(const FunctionCallbackInfo<Value>& args)
+{
+	args.GetReturnValue().Set(args.This());
 }
 
