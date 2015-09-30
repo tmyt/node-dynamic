@@ -1,6 +1,8 @@
 #include<node.h>
 #include<cstring>
 
+#include<nan.h>
+
 #include"dynamic.h"
 
 using namespace v8;
@@ -44,22 +46,21 @@ Local<Value> CallHandler(const Local<Value>& thiz, const Local<Value>& fn_, cons
 template<>
 Local<Boolean> CallHandler(const Local<Value>& thiz, const Local<Value>& fn_, const Local<Value>& arg1)
 {
-	Isolate* isolate = Isolate::GetCurrent();
 	CASTFN(fn, fn_);
 	Local<Value> argv[] = { arg1 };
 	Local<Value> ret = fn->Call(thiz, 1, argv);
-	return Boolean::New(isolate, ret->BooleanValue());
+	return Nan::New<Boolean>(ret->BooleanValue());
 }
 
 #define NC_(x, xx) !strcmp(x, (#xx)+1)
 #define NC(x) NC_(prop+1, x)
 #define NC2(x, xx) (*prop == x && NC(xx))
 #define GET_HANDLER_PROP(name) \
-	if(NC_(prop, name)) { info.GetReturnValue().Set(Local<Value>::New(isolate, obj->name##_)); return; }
+	if(NC_(prop, name)) { info.GetReturnValue().Set(Nan::New(obj->name##_)); return; }
 #define GET_HANDLER_PROP_STATIC(name, value) \
 	if(NC_(prop, name)) { info.GetReturnValue().Set(value); return; }
 #define SET_HANDLER_PROP(name, value) \
-	if(NC_(prop, name)) { obj->name##_.Reset(isolate, value); info.GetReturnValue().Set(value); return; }
+	if(NC_(prop, name)) { obj->name##_.Reset(value); info.GetReturnValue().Set(value); return; }
 #define IS_INTERNAL_PROP \
 	NC2('g', get) || NC2('s', set) || NC2('q', query) || NC2('d', delete) || NC2('e', enumerate)
 #define PRECHECK() if(*prop == 'g' || *prop == 's' || *prop == 'd' || *prop == 'e' || *prop == 'q')
@@ -67,17 +68,17 @@ Local<Boolean> CallHandler(const Local<Value>& thiz, const Local<Value>& fn_, co
 #define CHECK(x) \
 	LocalFunc(x); \
 	if( !fn->IsFunction() && \
-	    (!obj->has_super_ || !(fn = super->Get(Local<String>::New(isolate, property_names_[K_##x])))->IsFunction()) )
+	    (!obj->has_super_ || !(fn = super->Get(Nan::New(property_names_[K_##x])))->IsFunction()) )
 #define HANDLE(x) info.GetReturnValue().Set(x)
 
-#define Undef(x) x##_.Reset(isolate, Undefined(isolate))
-#define LocalValue(x, y) Local<Value> x = Local<Value>::New(isolate, y)
+#define Undef(x) x##_.Reset(Nan::Undefined())
+#define LocalValue(x, y) Local<Value> x = Nan::New(y)
 #define LocalFunc(x) LocalValue(fn, obj->x##_)
 
 #define Prologue(x) \
-	Isolate* isolate = Isolate::GetCurrent();\
+	Nan::HandleScope scope; \
 	DynamicObject* obj = ObjectWrap::Unwrap<DynamicObject>(x.This());\
-	Local<Object> super = Local<Object>::New(isolate, obj->super_)
+	Local<Object> super = Nan::New(obj->super_)
 #define Prop() \
 	String::Utf8Value u8prop(property); \
 	const char* prop = *u8prop
@@ -91,12 +92,12 @@ enum{
 	K_enumerate,
 };
 
-Persistent<String> DynamicObject::property_names_[5];
-Persistent<Function> DynamicObject::constructor;
+Nan::Persistent<String> DynamicObject::property_names_[5];
+Nan::Persistent<Function> DynamicObject::constructor;
 
 DynamicObject::DynamicObject() : has_super_(false)
 {
-	Isolate* isolate = Isolate::GetCurrent();
+	Nan::HandleScope scope;
 	Each(Undef);
 }
 
@@ -104,38 +105,36 @@ DynamicObject::~DynamicObject() { }
 
 /* static */ void DynamicObject::Init(Handle<Object> exports, Handle<Object> module)
 {
-	Isolate* isolate = Isolate::GetCurrent();
-#define n(x) property_names_[K_##x].Reset(isolate, String::NewFromUtf8(isolate, #x))
+	Nan::HandleScope scope;
+#define n(x) property_names_[K_##x].Reset(Nan::New<v8::String>(#x).ToLocalChecked())
 	Each(n);
 #undef n
 	// Prepare constructor template
-	Local<FunctionTemplate> tpl = FunctionTemplate::New(isolate, New);
-	tpl->SetClassName(String::NewFromUtf8(isolate, "DynamicObject"));
+	Local<FunctionTemplate> tpl = Nan::New<FunctionTemplate>(New);
+	tpl->SetClassName(Nan::New("DynamicObject").ToLocalChecked());
 	tpl->InstanceTemplate()->SetInternalFieldCount(1);
-	tpl->InstanceTemplate()->SetNamedPropertyHandler(Get, Set, Query, Delete, Enumerate);
+	Nan::SetNamedPropertyHandler(tpl->InstanceTemplate(), Get, Set, Query, Delete, Enumerate);
 
 	// Prototype
-	constructor.Reset(isolate, tpl->GetFunction());
-	module->Set(String::NewFromUtf8(isolate, "exports"),
-				 tpl->GetFunction());
+	constructor.Reset(tpl->GetFunction());
+	module->Set(Nan::New("exports").ToLocalChecked(), tpl->GetFunction());
 }
 
-/* static */ void DynamicObject::New(const FunctionCallbackInfo<Value>& args)
+/* static */ NAN_METHOD(DynamicObject::New)
 {
-	Isolate* isolate = Isolate::GetCurrent();
-
-	if(!args.IsConstructCall()) return;
+	Nan::HandleScope scope;
+	if(!info.IsConstructCall()) return;
 	// Construct object
 	DynamicObject* obj = new DynamicObject();
-	if(args[0]->IsObject()){
+	if(info[0]->IsObject()){
 		obj->has_super_ = true;
-		obj->super_.Reset(isolate, args[0]->ToObject());
+		obj->super_.Reset(info[0]->ToObject());
 	}
-	obj->Wrap(args.This());
-	args.GetReturnValue().Set(args.This());
+	obj->Wrap(info.This());
+	info.GetReturnValue().Set(info.This());
 }
 
-/* static */ void DynamicObject::Get(Local<String> property, const PropertyCallbackInfo<Value>& info)
+/* static */ NAN_PROPERTY_GETTER(DynamicObject::Get)
 {
 	Prologue(info);
 	Prop();
@@ -151,18 +150,18 @@ DynamicObject::~DynamicObject() { }
 		case 'q': GET_HANDLER_PROP(query); break;
 		case 'd': GET_HANDLER_PROP(delete); break;
 		case 'e': GET_HANDLER_PROP(enumerate); break;
-		case 'v': GET_HANDLER_PROP_STATIC(valueOf, FunctionTemplate::New(isolate, ValueOf)->GetFunction()); break;
-		case 'i': GET_HANDLER_PROP_STATIC(inspect, Undefined(isolate)); break;
+		case 'v': GET_HANDLER_PROP_STATIC(valueOf, Nan::New<FunctionTemplate>(ValueOf)->GetFunction()); break;
+		case 'i': GET_HANDLER_PROP_STATIC(inspect, Nan::Undefined()); break;
 	}
 	CHECK(get){
-		info.GetReturnValue().Set(Undefined(isolate));
+		info.GetReturnValue().Set(Nan::Undefined());
 		return;
 	}
 	// call javascript handler
 	HANDLE(CallHandler<Value>(info.This(), fn, property));
 }
 
-/* static */ void DynamicObject::Set(Local<String> property, Local<Value> value, const PropertyCallbackInfo<Value>& info)
+/* static */ NAN_PROPERTY_SETTER(DynamicObject::Set)
 {
 	Prologue(info);
 	Prop();
@@ -181,14 +180,14 @@ DynamicObject::~DynamicObject() { }
 		case 'e': SET_HANDLER_PROP(enumerate, value); break;
 	}
 	CHECK(set){
-		info.GetReturnValue().Set(Undefined(isolate));
+		info.GetReturnValue().Set(Nan::Undefined());
 		return;
 	}
 	// call javascript handler
 	HANDLE(CallHandler<Value>(info.This(), fn, property, value));
 }
 
-/* static */ void DynamicObject::Query(Local<String> property, const PropertyCallbackInfo<Integer>& info)
+/* static */ NAN_PROPERTY_QUERY(DynamicObject::Query)
 {
 	Prologue(info);
 	Prop();
@@ -206,7 +205,7 @@ DynamicObject::~DynamicObject() { }
 	HANDLE(CallHandler<Integer>(info.This(), fn, property));
 }
 
-/* static */ void DynamicObject::Delete(Local<String> property, const PropertyCallbackInfo<Boolean>& info)
+/* static */ NAN_PROPERTY_DELETER(DynamicObject::Delete)
 {
 	Prologue(info);
 	Prop();
@@ -224,19 +223,19 @@ DynamicObject::~DynamicObject() { }
 	HANDLE(CallHandler<Boolean>(info.This(), fn, property));
 }
 
-/* static */ void DynamicObject::Enumerate(const PropertyCallbackInfo<Array>& info)
+/* static */ NAN_PROPERTY_ENUMERATOR(DynamicObject::Enumerate)
 {
 	Prologue(info);
 	CHECK(enumerate){
-		info.GetReturnValue().Set(Array::New(isolate));
+		info.GetReturnValue().Set(Nan::New<v8::Array>());
 		return;
 	}
 	// call javascript handler
 	HANDLE(CallHandler<Array>(info.This(), fn));
 }
 
-/* static */ void DynamicObject::ValueOf(const FunctionCallbackInfo<Value>& args)
+/* static */ NAN_METHOD(DynamicObject::ValueOf)
 {
-	args.GetReturnValue().Set(args.This());
+	info.GetReturnValue().Set(info.This());
 }
 
