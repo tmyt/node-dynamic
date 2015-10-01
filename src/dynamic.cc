@@ -10,46 +10,36 @@ using namespace v8;
 #define CASTFN(x, y) Local<Function> x = Local<Function>::Cast(y)
 
 template<typename T>
-Local<T> CallHandler(const Local<Value>& thiz, const Local<Value>& fn_)
+Local<T> Cast(Local<Value> value) { return value.As<T>(); }
+template<>
+Local<Value> Cast<Value>(Local<Value> value) { return value; }
+template<>
+Local<Boolean> Cast<Boolean>(Local<Value> value) { return Nan::New<Boolean>(Nan::To<bool>(value).FromJust()); }
+
+template<typename T>
+Local<T> CallHandler(const Local<Object>& thiz, const Local<Value>& fn_)
 {
 	CASTFN(fn, fn_);
 	Local<Value> ret = fn->Call(thiz, 0, 0);
-	return Handle<T>::Cast(ret);
+	return Cast<T>(ret);
 }
 
-template<typename T>
-Local<T> CallHandler(const Local<Value>& thiz, const Local<Value>& fn_, const Local<Value>& arg1)
+template<typename T, typename U>
+Local<T> CallHandler(const Local<Object>& thiz, const Local<Value>& fn_, const U& arg1)
 {
 	CASTFN(fn, fn_);
 	Local<Value> argv[] = { arg1 };
 	Local<Value> ret = fn->Call(thiz, 1, argv);
-	return Handle<T>::Cast(ret);
+	return Cast<T>(ret);
 }
 
-template<typename T>
-Local<T> CallHandler(const Local<Value>& thiz, const Local<Value>& fn_, const Local<Value>& arg1, const Local<Value>& arg2)
+template<typename T, typename U, typename V>
+Local<T> CallHandler(const Local<Object>& thiz, const Local<Value>& fn_, const U& arg1, const V& arg2)
 {
 	CASTFN(fn, fn_);
 	Local<Value> argv[] = { arg1, arg2 };
 	Local<Value> ret = fn->Call(thiz, 2, argv);
-	return Handle<T>::Cast(ret);
-}
-
-template<>
-Local<Value> CallHandler(const Local<Value>& thiz, const Local<Value>& fn_, const Local<Value>& arg1)
-{
-	CASTFN(fn, fn_);
-	Local<Value> argv[] = { arg1 };
-	return fn->Call(thiz, 1, argv);
-}
-
-template<>
-Local<Boolean> CallHandler(const Local<Value>& thiz, const Local<Value>& fn_, const Local<Value>& arg1)
-{
-	CASTFN(fn, fn_);
-	Local<Value> argv[] = { arg1 };
-	Local<Value> ret = fn->Call(thiz, 1, argv);
-	return Nan::New<Boolean>(ret->BooleanValue());
+	return Cast<T>(ret);
 }
 
 #define NC_(x, xx) !strcmp(x, (#xx)+1)
