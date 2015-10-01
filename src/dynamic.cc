@@ -107,8 +107,7 @@ DynamicObject::~DynamicObject() { }
 
 	// Prototype
 	constructor.Reset(tpl->GetFunction());
-	Nan::Set(target, Nan::New<v8::String>("exports").ToLocalChecked(),
-	    Nan::GetFunction(tpl).ToLocalChecked());
+	Nan::Set(target, Nan::New("Dynamic").ToLocalChecked(), tpl->GetFunction());
 }
 
 /* static */ NAN_METHOD(DynamicObject::New)
