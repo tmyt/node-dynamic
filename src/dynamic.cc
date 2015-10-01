@@ -93,7 +93,7 @@ DynamicObject::DynamicObject() : has_super_(false)
 
 DynamicObject::~DynamicObject() { }
 
-/* static */ void DynamicObject::Init(Handle<Object> exports, Handle<Object> module)
+/* static */ NAN_MODULE_INIT(DynamicObject::Init)
 {
 	Nan::HandleScope scope;
 #define n(x) property_names_[K_##x].Reset(Nan::New<v8::String>(#x).ToLocalChecked())
@@ -107,7 +107,8 @@ DynamicObject::~DynamicObject() { }
 
 	// Prototype
 	constructor.Reset(tpl->GetFunction());
-	module->Set(Nan::New("exports").ToLocalChecked(), tpl->GetFunction());
+	Nan::Set(target, Nan::New<v8::String>("exports").ToLocalChecked(),
+	    Nan::GetFunction(tpl).ToLocalChecked());
 }
 
 /* static */ NAN_METHOD(DynamicObject::New)

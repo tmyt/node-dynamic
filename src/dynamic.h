@@ -9,7 +9,7 @@
 class DynamicObject : public node::ObjectWrap
 {
 public:
-	static void Init(v8::Handle<v8::Object> exports, v8::Handle<v8::Object> module);
+	static NAN_MODULE_INIT(Init);
 
 private:
 	explicit DynamicObject();

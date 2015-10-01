@@ -1,12 +1,14 @@
 #include<node.h>
 
+#include<nan.h>
+
 #include"dynamic.h"
 
 using namespace v8;
 
-void init(Handle<Object> exports, Handle<Object> module)
+NAN_MODULE_INIT(init)
 {
-	DynamicObject::Init(exports, module);
+	DynamicObject::Init(target);
 }
 
 NODE_MODULE(dynamic, init)
