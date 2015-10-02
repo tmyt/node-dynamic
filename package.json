@@ -2,7 +2,8 @@
   "name": "dynamic",
   "version": "0.0.1",
   "dependencies": {
-    "nan": "*"
+    "nan": "*",
+    "bindings": "*"
   },
   "scripts": {
     "test": "node test/test.js"

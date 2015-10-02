@@ -1,1 +1,1 @@
-module.exports = require('./build/Release/dynamic.node').Dynamic;
+module.exports = require('bindings')('dynamic.node').Dynamic;
